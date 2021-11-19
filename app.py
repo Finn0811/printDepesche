@@ -17,15 +17,22 @@ import cups
 # $ pip3 install pdfkit
 # $ pip3 install Flask
 #
+# Update to wkhtmltopdf with patched QT
+# apt-get remove --purge wkhtmltopdf
+# apt-get install openssl build-essential xorg libssl-dev
+# wget https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.5/wkhtmltox_0.12.5-1.raspbian.stretch_armhf.deb
+# dpkg -i wkhtmltox_0.12.5-1.raspbian.stretch_armhf.deb
+#
 
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False
 app.config.from_object('config')
 
 
-def print_pdf(pdf_file):
+def print_pdf(pdf_file, copies):
     conn = cups.Connection()
-    conn.printFile(app.config["PRINTER"], pdf_file, "Alarmdepesche", {"copies": app.config["COPIES"]})
+    conn.printFile(app.config["PRINTER"], pdf_file, "Alarmdepesche", {"copies": str(copies)})
 
 
 @app.route('/')
@@ -53,16 +60,38 @@ def print_depesche():
 
         html_data = base64.b64decode(request.json['html'])
 
+        amount = app.config["COPIES"]
+        if "amount" in request.json:
+            if request.json['amount'] > 0:
+                amount = request.json['amount']
+
+        # print(request.json)
+        # with open('alarmdepesche.html', 'w') as file:
+        #     file.write(html_data.decode("utf8"))
         # print(html_data.decode("utf8"))
 
         # config = pdfkit.configuration(wkhtmltopdf="C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe")
         config = pdfkit.configuration()
 
+        options = {
+            'dpi': 365,
+            'page-size': 'A4',
+            'margin-top': '0.25in',
+            'margin-right': '0.25in',
+            'margin-bottom': '0.25in',
+            'margin-left': '0.25in',
+            'encoding': "UTF-8",
+            'custom-header': [
+                ('Accept-Encoding', 'gzip')
+            ],
+            'no-outline': None,
+        }
+
         pdf = pdfkit.from_string(html_data.decode("utf8"), False, configuration=config)
 
         with tempfile.NamedTemporaryFile(mode="w+b", suffix=".pdf", delete=False) as tempFile:
             tempFile.write(pdf)
-            print_pdf(tempFile.name)
+            print_pdf(tempFile.name, amount)
 
         print("Finished printing request.")
 
